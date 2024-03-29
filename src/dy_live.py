@@ -30,6 +30,8 @@ from proto.dy_pb2 import UpdateFanTicketMessage
 from proto.dy_pb2 import CommonTextMessage
 from proto.dy_pb2 import ProductChangeMessage
 
+import pandas as pd
+
 # 直播信息全局变量
 liveRoomId = ""
 ttwid = ""
@@ -156,6 +158,9 @@ def unPackWebcastChatMessage(data):
     chatMessage = ChatMessage()
     chatMessage.ParseFromString(data)
     data = json_format.MessageToDict(chatMessage, preserving_proto_field_name=True)
+
+    saveToCsv(data)
+    
     log = json.dumps(data, ensure_ascii=False)
     logger.info(
         f'[unPackWebcastChatMessage] [直播间弹幕消息{GlobalVal.commit_num}] [房间Id：' + liveRoomId + '] | ' + log)
@@ -359,3 +364,17 @@ def hexStrToProtobuf(hexStr):
         output = parser.parse_message(fh, 'message')
     print(output)
     return output
+
+def saveToCsv(data):
+    # 指定文件名
+    filename = 'output.csv'
+
+    # 检查文件是否存在且不为空
+    file_exists = os.path.isfile(filename) and os.path.getsize(filename) > 0
+
+    # 如果文件不存在或为空，则包含表头；如果文件已存在且非空，则不包含表头
+    header = not file_exists  # 如果文件不存在或为空，header 为 True
+
+    # 保存到 csv
+    df = pd.json_normalize(data)
+    df.to_csv(filename, mode='a', index=False, header=header)
