@@ -40,7 +40,8 @@ liveRoomTitle = ''
 live_stream_url = ""
 # 记录抓取直播时间
 start_time = time.time()
-
+fileIndex = 0
+dataIndex = 0
 
 def onMessage(ws: websocket.WebSocketApp, message: bytes):
     # 相当于每一条消息
@@ -122,7 +123,7 @@ def WebcastProductChangeMessage(data):
     commonTextMessage.ParseFromString(data)
     data = json_format.MessageToDict(commonTextMessage, preserving_proto_field_name=True)
     log = json.dumps(data, ensure_ascii=False)
-    logger.info('[WebcastProductChangeMessage] [] [房间Id：' + liveRoomId + '] | ' + log)
+    # logger.info('[WebcastProductChangeMessage] [] [房间Id：' + liveRoomId + '] | ' + log)
 
 
 def unPackWebcastUpdateFanTicketMessage(data):
@@ -130,7 +131,7 @@ def unPackWebcastUpdateFanTicketMessage(data):
     updateFanTicketMessage.ParseFromString(data)
     data = json_format.MessageToDict(updateFanTicketMessage, preserving_proto_field_name=True)
     log = json.dumps(data, ensure_ascii=False)
-    logger.info('[unPackWebcastUpdateFanTicketMessage] [] [房间Id：' + liveRoomId + '] | ' + log)
+    # logger.info('[unPackWebcastUpdateFanTicketMessage] [] [房间Id：' + liveRoomId + '] | ' + log)
     return data
 
 
@@ -179,7 +180,7 @@ def unPackWebcastGiftMessage(data):
         gift_traceId = data.get("traceId")
         # 对特殊礼物单独统计
         if gift_name in LIVE_GIFT_LIST and gift_traceId not in GlobalVal.gift_id_list:
-            logger.info(f"抓到特殊礼物了: {gift_name}，用户名：{nick_name}")
+            # logger.info(f"抓到特殊礼物了: {gift_name}，用户名：{nick_name}")
             GlobalVal.gift_list.append(f"{nick_name}")
             GlobalVal.gift_id_list.append(gift_traceId)
         # 特殊礼物价值依然统计
@@ -189,9 +190,11 @@ def unPackWebcastGiftMessage(data):
         ws_sender(f"收到礼物: {gift_name}，礼物数量:{GlobalVal.gift_num}，礼物价值: {GlobalVal.gift_value}")
     except Exception as e:
         logger.error(f"解析礼物数据出错: {e}")
-    log = json.dumps(data, ensure_ascii=False)
-    logger.info(
-        f'[unPackWebcastGiftMessage] [直播间礼物消息{GlobalVal.gift_num}:{GlobalVal.gift_value}] [房间Id：' + liveRoomId + '] ' + log)
+
+
+    # log = json.dumps(data, ensure_ascii=False)
+    # logger.info(
+    #     f'[unPackWebcastGiftMessage] [直播间礼物消息{GlobalVal.gift_num}:{GlobalVal.gift_value}] [房间Id：' + liveRoomId + '] ' + log)
     return data
 
 
@@ -204,7 +207,7 @@ def unPackWebcastMemberMessage(data):
     # 直播间人数统计
     member_num = int(data.get("memberCount", 0))
     log = json.dumps(data, ensure_ascii=False)
-    logger.info(f'[unPackWebcastMemberMessage] [直播间成员加入: {member_num}] [房间Id：' + liveRoomId + '] | ' + log)
+    # logger.info(f'[unPackWebcastMemberMessage] [直播间成员加入: {member_num}] [房间Id：' + liveRoomId + '] | ' + log)
     return data
 
 
@@ -216,7 +219,7 @@ def unPackWebcastLikeMessage(data):
     # like_num = int(data["total"])
     GlobalVal.like_num = int(data.get("total", 0))
     log = json.dumps(data, ensure_ascii=False)
-    logger.info(f'[unPackWebcastLikeMessage] [直播间点赞统计{data["total"]}] [房间Id：' + liveRoomId + '] | ' + log)
+    # logger.info(f'[unPackWebcastLikeMessage] [直播间点赞统计{data["total"]}] [房间Id：' + liveRoomId + '] | ' + log)
     return data
 
 
@@ -366,15 +369,26 @@ def hexStrToProtobuf(hexStr):
     return output
 
 def saveToCsv(data):
+    global fileIndex
+    global dataIndex
+
+    df = pd.json_normalize(data)
+    dataIndex += 1
+
     # 指定文件名
-    filename = 'output.csv'
+    filename = "{}.csv".format(fileIndex)
 
     # 检查文件是否存在且不为空
-    file_exists = os.path.isfile(filename) and os.path.getsize(filename) > 0
+    file_exists = os.path.isfile(filename)
+    file_full = dataIndex >= 10000
 
-    # 如果文件不存在或为空，则包含表头；如果文件已存在且非空，则不包含表头
-    header = not file_exists  # 如果文件不存在或为空，header 为 True
-
-    # 保存到 csv
-    df = pd.json_normalize(data)
-    df.to_csv(filename, mode='a', index=False, header=header)
+    # 如果文件不存在
+    if not file_exists:
+        df.to_csv(filename, index=False)
+    elif file_full:
+        fileIndex += 1
+        filename = "{}.csv".format(fileIndex)
+        df.to_csv(filename, index=False)
+        dataIndex = 0
+    else:
+        df.to_csv(filename, mode='a', index=False, header=False)
